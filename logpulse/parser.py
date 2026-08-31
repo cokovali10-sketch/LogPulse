@@ -26,6 +26,28 @@ APACHE_PATTERN = re.compile(
     r'(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<user_agent>[^"]*)")?'
 )
 
+NGINX_PATTERN = re.compile(
+    r'^(?P<ip>\S+)\s+-\s+(?P<user>\S+)\s+'
+    r'\[(?P<timestamp>[^\]]+)\]\s+'
+    r'"(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<protocol>[^"]+)"\s+'
+    r'(?P<status>\d{3})\s+(?P<size>\d+|-)\s+'
+    r'"(?P<referrer>[^"]*)"\s+"(?P<user_agent>[^"]*)"'
+    r'(?:\s+"(?P<forwarded>[^"]*)")?'
+    r'(?:\s+(?P<request_time>[\d.]+))?'
+)
+
+WINDOWS_EVENT_PATTERN = re.compile(
+    r'^(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>\d{2}:\d{2}:\d{2})\s+'
+    r'(?P<level>Information|Warning|Error|Critical)\s+'
+    r'(?P<source>[^-]+)\s+-\s+(?P<message>.+)$'
+)
+
+GENERIC_BRACKETED = re.compile(
+    r'^(?:\[?(?P<timestamp>[^\]\s]+(?:\s+[^\]]+)?)\]?\s+)?'
+    r'(?P<level>DEBUG|INFO|NOTICE|WARNING|WARN|ERROR|ERR|CRITICAL|FATAL|ALERT|EMERG)\s*'
+    r'(?::?\s+)?(?P<message>.+)$'
+)
+
 JSON_LINE_KEYS = {"timestamp", "level", "message"}
 
 
@@ -106,7 +128,49 @@ def parse_log_line(raw: str, line_number: int) -> Optional[LogEntry]:
                 "status": int(m.group("status")),
                 "size": m.group("size"),
                 "user_agent": m.group("user_agent"),
+                "referrer": m.group("referrer"),
             },
+        )
+
+    m = NGINX_PATTERN.match(raw)
+    if m:
+        status = int(m.group("status"))
+        level = "ERROR" if status >= 500 else ("WARNING" if status >= 400 else "INFO")
+        extra = {
+            "method": m.group("method"),
+            "path": m.group("path"),
+            "status": status,
+            "size": m.group("size"),
+            "user_agent": m.group("user_agent"),
+            "referrer": m.group("referrer"),
+            "forwarded": m.group("forwarded"),
+        }
+        if m.group("request_time"):
+            extra["request_time"] = float(m.group("request_time"))
+        return LogEntry(
+            timestamp=parse_timestamp(m.group("timestamp")),
+            level=level,
+            source=m.group("ip"),
+            message=f'{m.group("method")} {m.group("path")} -> {status}',
+            line_number=line_number,
+            raw=raw,
+            extra=extra,
+        )
+
+    m = WINDOWS_EVENT_PATTERN.match(raw)
+    if m:
+        level_map = {
+            "Information": "INFO", "Warning": "WARNING",
+            "Error": "ERROR", "Critical": "CRITICAL",
+        }
+        return LogEntry(
+            timestamp=parse_timestamp(f"{m.group('date')} {m.group('time')}"),
+            level=level_map.get(m.group("level"), "INFO"),
+            source=m.group("source").strip(),
+            message=m.group("message"),
+            line_number=line_number,
+            raw=raw,
+            extra={"event_level": m.group("level")},
         )
 
     try:

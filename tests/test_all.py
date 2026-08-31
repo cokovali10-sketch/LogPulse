@@ -35,6 +35,15 @@ JSON_SAMPLE = """{"timestamp":"2024-01-15T10:30:01Z","level":"INFO","source":"ap
 {"timestamp":"2024-01-15T10:30:02Z","level":"ERROR","source":"app.db","message":"Connection timeout"}
 """
 
+NGINX_SAMPLE = """192.168.1.1 - - [15/Jan/2024:10:30:01 +0000] "GET /api/users HTTP/1.1" 200 1234 "-" "Mozilla/5.0" 0.015
+192.168.1.2 - admin [15/Jan/2024:10:30:02 +0000] "POST /login HTTP/1.1" 500 567 "-" "curl/7.68" 0.320
+"""
+
+WINDOWS_SAMPLE = """2024-01-15 10:30:01 Information Service Control Manager - The following service was installed: MyService
+2024-01-15 10:30:02 Warning Disk - Disk 0 has been replaced with a different disk
+2024-01-15 10:30:03 Error Application Popup - Application popup: System Error
+"""
+
 
 def test_parse_common():
     entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[0], 1)
@@ -148,6 +157,98 @@ def test_full_pipeline():
     assert report.generate().filtered_lines == 4
     text = report.to_text()
     assert "WARNING" in text
+
+
+def test_parse_nginx():
+    entry = parse_log_line(NGINX_SAMPLE.strip().splitlines()[0], 1)
+    assert entry is not None
+    assert entry.extra["status"] == 200
+    assert entry.extra["method"] == "GET"
+    assert entry.extra["size"] == "1234"
+
+
+def test_parse_nginx_error():
+    entry = parse_log_line(NGINX_SAMPLE.strip().splitlines()[1], 1)
+    assert entry is not None
+    assert entry.level == "ERROR"
+    assert entry.extra["status"] == 500
+
+
+def test_parse_windows_event():
+    entry = parse_log_line(WINDOWS_SAMPLE.strip().splitlines()[0], 1)
+    assert entry is not None
+    assert entry.level == "INFO"
+    assert entry.source == "Service Control Manager"
+
+
+def test_parse_windows_event_warning():
+    entry = parse_log_line(WINDOWS_SAMPLE.strip().splitlines()[1], 1)
+    assert entry is not None
+    assert entry.level == "WARNING"
+
+
+def test_parse_windows_event_error():
+    entry = parse_log_line(WINDOWS_SAMPLE.strip().splitlines()[2], 1)
+    assert entry is not None
+    assert entry.level == "ERROR"
+
+
+def test_filter_regex():
+    entries = []
+    for i, line in enumerate(SAMPLE_LOGS.strip().splitlines(), 1):
+        e = parse_log_line(line, i)
+        if e:
+            entries.append(e)
+    f = LogFilter().by_regex(r"timeout|refused")
+    result = f.apply(entries)
+    assert len(result) >= 2
+
+
+def test_filter_time_range():
+    entries = []
+    for i, line in enumerate(SAMPLE_LOGS.strip().splitlines(), 1):
+        e = parse_log_line(line, i)
+        if e:
+            entries.append(e)
+    from datetime import datetime
+    f = LogFilter().by_time_range(
+        start=datetime(2024, 1, 15, 10, 30, 0),
+        end=datetime(2024, 1, 15, 11, 0, 0),
+    )
+    result = f.apply(entries)
+    assert len(result) == 6
+
+
+def test_exclude_level():
+    entries = []
+    for i, line in enumerate(SAMPLE_LOGS.strip().splitlines(), 1):
+        e = parse_log_line(line, i)
+        if e:
+            entries.append(e)
+    f = LogFilter().exclude_level("INFO")
+    result = f.apply(entries)
+    assert all(e.level != "INFO" for e in result)
+
+
+def test_report_html_with_errors():
+    analyzer = LogAnalyzer()
+    analyzer.load_string(SAMPLE_LOGS)
+    html = analyzer.report().to_html()
+    assert "Errors" in html or "ERROR" in html
+
+
+def test_analyzer_multiple_loads():
+    analyzer = LogAnalyzer()
+    analyzer.load_string(SAMPLE_LOGS)
+    analyzer.load_string(SYSLOG_SAMPLE)
+    assert len(analyzer.entries) == 10
+
+
+def test_level_num():
+    entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[0], 1)
+    assert entry.level_num == 1  # INFO
+    entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[3], 1)
+    assert entry.level_num == 3  # ERROR
 
 
 if __name__ == "__main__":
