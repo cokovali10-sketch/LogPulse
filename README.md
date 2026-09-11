@@ -1,8 +1,8 @@
 # LogPulse
 
-Advanced log analyzer with multi-format parsing, filtering, and comprehensive reporting.
+Advanced log analyzer with multi-format parsing, filtering, real-time tail monitoring, and comprehensive reporting.
 
-**Version:** 1.0.0 | **Language:** Python | **License:** MIT
+**Version:** 1.1.0 | **Python:** 3.10+ | **License:** MIT | **CI:** GitHub Actions
 
 ## Features
 
@@ -11,6 +11,12 @@ Advanced log analyzer with multi-format parsing, filtering, and comprehensive re
 - **Smart detection** — auto-detects log format per line, mixed formats supported
 - **Streaming analysis** — process files line-by-line for memory efficiency
 - **Batch & directory scanning** — analyze single files, multiple files, or entire directories
+
+### Real-Time Tail Monitoring
+- **`--tail` mode** — watch log files and see new entries printed as they arrive
+- **Color-coded output** — levels colorized for quick visual scanning (ANSI terminals)
+- **Live summary** — per-session stats printed on Ctrl+C
+- **Multi-file tail** — watch multiple files or directories simultaneously
 
 ### Filtering Engine
 - **Level filtering** — min/max severity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -41,10 +47,10 @@ Advanced log analyzer with multi-format parsing, filtering, and comprehensive re
 pip install -e .
 ```
 
-Or run directly:
+Or with development dependencies:
 
 ```bash
-python -m logpulse.cli [options] <paths...>
+pip install -e ".[dev]"
 ```
 
 ## CLI Usage
@@ -76,6 +82,15 @@ logpulse app.log logs/ -f html -o report.html
 
 # Show only statistics
 logpulse app.log --stats
+
+# Real-time tail mode (watch files live)
+logpulse /var/log/app.log --tail
+
+# Tail with filtering (only ERROR+ from specific source)
+logpulse /var/log/app.log --tail -l ERROR -s server.api
+
+# Tail a directory of logs
+logpulse /var/log/ --tail --no-color
 ```
 
 ## Programmatic API
@@ -109,6 +124,23 @@ print(analyzer.stats)
 # {'total_entries': 156, 'levels': {'ERROR': 23, 'INFO': 120}, ...}
 ```
 
+### Real-Time Tail API
+
+```python
+from logpulse.report import tail_log, LiveDashboard
+
+# Watch a file and process entries as they appear
+for entry in tail_log("/var/log/app.log"):
+    print(f"[{entry.level}] {entry.message}")
+
+# Use the built-in color-coded dashboard
+dashboard = LiveDashboard()
+for entry in tail_log("/var/log/app.log", callback=dashboard.on_entry):
+    pass  # entries are printed automatically
+
+dashboard.print_summary()  # call on exit
+```
+
 ## Supported Log Formats
 
 | Format | Example | Parser |
@@ -120,29 +152,62 @@ print(analyzer.stats)
 | Windows Event | `2024-01-15 10:30:01 Error Source - message` | `WINDOWS_EVENT_PATTERN` |
 | JSON-line | `{"timestamp":"...","level":"INFO","message":"..."}` | JSON parser |
 
-## Tests
+## Development
 
 ```bash
-cd LogPulse
-python tests/test_all.py
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Check formatting
+ruff format --check .
+
+# Auto-format
+ruff format .
+
+# Lint
+ruff check .
 ```
 
-Runs 23 tests covering parsing, filtering, reporting, and edge cases.
+## CI/CD
+
+GitHub Actions runs on every push and PR:
+- **Lint** — ruff format + lint check
+- **Test** — pytest on Python 3.10, 3.11, 3.12
+- **Build** — sdist + wheel build
+
+## Benchmarks
+
+See [benchmarks/README.md](benchmarks/README.md) for performance data.
+
+```bash
+python benchmarks/run_benchmarks.py
+```
 
 ## Project Structure
 
 ```
 LogPulse/
 ├── logpulse/
-│   ├── __init__.py      # Package metadata
-│   ├── parser.py        # Log line parsing (6 formats)
-│   ├── filter.py        # Filtering engine
-│   ├── report.py        # Report generation (4 formats)
-│   ├── analyzer.py      # Main analyzer orchestrator
-│   └── cli.py           # CLI interface
+│   ├── __init__.py          # Package metadata
+│   ├── parser.py            # Log line parsing (6 formats)
+│   ├── filter.py            # Filtering engine
+│   ├── report.py            # Report generation + real-time tail + dashboard
+│   ├── analyzer.py          # Main analyzer orchestrator
+│   └── cli.py               # CLI interface (--tail mode)
 ├── tests/
-│   └── test_all.py      # 23 unit tests
-├── setup.py             # Package configuration
+│   └── test_all.py          # 28 unit tests
+├── benchmarks/
+│   ├── README.md            # Performance data
+│   └── run_benchmarks.py    # Benchmark runner
+├── .github/
+│   └── workflows/
+│       └── ci.yml           # GitHub Actions CI
+├── pyproject.toml           # Modern Python packaging
+├── setup.py                 # Legacy packaging (deprecated)
+├── .gitignore
 └── README.md
 ```
 

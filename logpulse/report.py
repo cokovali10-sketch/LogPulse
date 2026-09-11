@@ -1,14 +1,17 @@
-"""Report generation from filtered log entries."""
+"""Report generation from filtered log entries and real-time tail monitoring."""
 
 import json
 import csv
 import io
+import os
+import sys
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
-from .parser import LogEntry
+from .parser import LogEntry, parse_log_line
 
 
 @dataclass
@@ -195,3 +198,102 @@ class ReportGenerator:
 
         html.append("</body></html>")
         return "\n".join(html)
+
+
+def tail_log(
+    filepath: str,
+    callback: Optional[Callable[[LogEntry], None]] = None,
+    poll_interval: float = 0.5,
+    follow: bool = True,
+):
+    """Watch a log file and yield new lines as they appear.
+
+    Args:
+        filepath: Path to the log file to tail.
+        callback: Optional function called for each new parsed LogEntry.
+        poll_interval: Seconds between polls when waiting for new data.
+        follow: If True, keep watching after reaching EOF. If False, stop at EOF.
+
+    Yields:
+        LogEntry objects as new lines are read from the file.
+    """
+    line_number = 0
+    while not os.path.isfile(filepath):
+        time.sleep(poll_interval)
+
+    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        while True:
+            line = f.readline()
+            if line:
+                line_number += 1
+                entry = parse_log_line(line, line_number)
+                if entry:
+                    if callback:
+                        callback(entry)
+                    yield entry
+            elif follow:
+                time.sleep(poll_interval)
+            else:
+                break
+
+
+class LiveDashboard:
+    """Color-coded real-time terminal dashboard for log monitoring.
+
+    ANSI color codes are used for level-based coloring. Falls back to plain
+    text when the terminal does not support color.
+    """
+
+    COLORS = {
+        "DEBUG": "\033[36m",      # cyan
+        "INFO": "\033[37m",       # white
+        "WARNING": "\033[33m",    # yellow
+        "ERROR": "\033[31m",      # red
+        "CRITICAL": "\033[1;31m", # bold red
+    }
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+
+    def __init__(self, use_color: Optional[bool] = None, max_display: int = 50):
+        if use_color is None:
+            self._color = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+        else:
+            self._color = use_color
+        self.max_display = max_display
+        self._count = 0
+        self._level_counts: Dict[str, int] = Counter()
+
+    def _colorize(self, level: str, text: str) -> str:
+        if not self._color:
+            return text
+        code = self.COLORS.get(level, "")
+        return f"{code}{text}{self.RESET}"
+
+    def on_entry(self, entry: LogEntry) -> None:
+        """Handle a new log entry — print it to stdout."""
+        self._count += 1
+        self._level_counts[entry.level] += 1
+
+        ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else "N/A"
+        level_tag = self._colorize(entry.level, f"[{entry.level:>8s}]")
+        source_tag = self._colorize(entry.level, f" {entry.source}")
+
+        line = f"{ts} {level_tag}{source_tag}  {entry.message}"
+        print(line, flush=True)
+
+    def print_summary(self) -> None:
+        """Print a summary of the monitoring session."""
+        print()
+        print("=" * 60)
+        print(f"  {self.BOLD}LogPulse Live Summary{self.RESET}")
+        print("=" * 60)
+        print(f"  Total entries seen: {self._count}")
+        print()
+        if self._level_counts:
+            print("  Level breakdown:")
+            for level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+                cnt = self._level_counts.get(level, 0)
+                if cnt:
+                    bar = "#" * min(cnt, 40)
+                    print(f"    {level:10s} {cnt:6d}  {bar}")
+        print("=" * 60)

@@ -4,13 +4,15 @@ import os
 import sys
 import json
 import tempfile
+import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from logpulse.parser import parse_log_line, LEVELS
 from logpulse.filter import LogFilter
 from logpulse.analyzer import LogAnalyzer
-from logpulse.report import ReportGenerator
+from logpulse.report import ReportGenerator, LiveDashboard, tail_log
 
 
 SAMPLE_LOGS = """2024-01-15 10:30:01 INFO server.app Starting application
@@ -249,6 +251,71 @@ def test_level_num():
     assert entry.level_num == 1  # INFO
     entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[3], 1)
     assert entry.level_num == 3  # ERROR
+
+
+def test_live_dashboard_counts():
+    dashboard = LiveDashboard(use_color=False)
+    entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[0], 1)
+    dashboard.on_entry(entry)
+    assert dashboard._count == 1
+    assert dashboard._level_counts["INFO"] == 1
+
+
+def test_live_dashboard_summary():
+    dashboard = LiveDashboard(use_color=False)
+    for i, line in enumerate(SAMPLE_LOGS.strip().splitlines(), 1):
+        entry = parse_log_line(line, i)
+        if entry:
+            dashboard.on_entry(entry)
+    assert dashboard._count == 8
+    assert dashboard._level_counts["ERROR"] == 2
+    assert dashboard._level_counts["CRITICAL"] == 1
+
+
+def test_tail_log_basic():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(SAMPLE_LOGS)
+        f.flush()
+        path = f.name
+    try:
+        entries = list(tail_log(path, follow=False))
+        assert len(entries) == 8
+        assert entries[0].level == "INFO"
+    finally:
+        os.unlink(path)
+
+
+def test_tail_log_new_lines():
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(SAMPLE_LOGS)
+        f.flush()
+        path = f.name
+
+    collected = []
+
+    def writer():
+        time.sleep(0.3)
+        with open(path, "a", encoding="utf-8") as af:
+            af.write("2024-01-15 13:00:00 ERROR server.new New error appended\n")
+        time.sleep(0.5)
+
+    try:
+        t = threading.Thread(target=writer)
+        t.start()
+        for entry in tail_log(path, follow=True, poll_interval=0.1):
+            collected.append(entry)
+            if len(collected) >= 9:
+                break
+        t.join(timeout=3)
+        assert len(collected) >= 9
+        assert collected[-1].source == "server.new"
+    finally:
+        os.unlink(path)
+
+
+def test_report_version():
+    from logpulse import __version__
+    assert __version__ == "1.1.0"
 
 
 if __name__ == "__main__":

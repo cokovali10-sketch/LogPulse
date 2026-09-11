@@ -1,6 +1,7 @@
 """CLI interface for LogPulse."""
 
 import argparse
+import signal
 import sys
 import os
 from datetime import datetime
@@ -25,8 +26,15 @@ def main():
     parser.add_argument("-f", "--format", choices=["text", "json", "csv", "html"], default="text", help="Output format")
     parser.add_argument("-o", "--output", default=None, help="Output file (default: stdout)")
     parser.add_argument("--stats", action="store_true", help="Show statistics only")
+    parser.add_argument("--tail", action="store_true", help="Real-time tail mode — watch files for new entries")
+    parser.add_argument("--no-color", action="store_true", help="Disable color output in tail mode")
+    parser.add_argument("--poll-interval", type=float, default=0.5, help="Poll interval in seconds for tail mode (default: 0.5)")
 
     args = parser.parse_args()
+
+    if args.tail:
+        _run_tail_mode(args)
+        return
 
     analyzer = LogAnalyzer()
     for path in args.paths:
@@ -81,6 +89,56 @@ def main():
         print(f"Report written to: {args.output}", file=sys.stderr)
     else:
         print(output)
+
+
+def _run_tail_mode(args):
+    """Run LogPulse in real-time tail mode."""
+    from .report import LiveDashboard, tail_log
+
+    files = []
+    for path in args.paths:
+        if os.path.isfile(path):
+            files.append(path)
+        elif os.path.isdir(path):
+            for root, _dirs, fnames in os.walk(path):
+                for fname in sorted(fnames):
+                    if any(fname.endswith(ext) for ext in (".log", ".txt", ".out", ".err")):
+                        files.append(os.path.join(root, fname))
+        else:
+            print(f"Warning: {path} not found, skipping", file=sys.stderr)
+
+    if not files:
+        print("No log files found to tail.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"LogPulse tail mode — watching {len(files)} file(s). Press Ctrl+C to stop.\n", file=sys.stderr)
+
+    dashboard = LiveDashboard(use_color=not args.no_color)
+
+    running = True
+
+    def _shutdown(sig, frame):
+        nonlocal running
+        running = False
+
+    signal.signal(signal.SIGINT, _shutdown)
+    signal.signal(signal.SIGTERM, _shutdown)
+
+    generators = [
+        tail_log(f, callback=dashboard.on_entry, poll_interval=args.poll_interval, follow=True)
+        for f in files
+    ]
+
+    while running:
+        for gen in generators:
+            try:
+                next(gen)
+            except StopIteration:
+                pass
+        if not running:
+            break
+
+    dashboard.print_summary()
 
 
 if __name__ == "__main__":
