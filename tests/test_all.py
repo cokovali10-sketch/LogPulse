@@ -313,6 +313,29 @@ def test_tail_log_new_lines():
         os.unlink(path)
 
 
+PAPER_SAMPLE = """[12:43:22] [ServerMain/INFO]: Loading properties
+[12:43:22] [Server thread/ERROR]: [ModernPluginLoadingStrategy] Ambiguous plugin name 'X'
+[12:43:24] [Server thread/WARN]: Plugin Y tried to register permission
+[14:00:01] [Craft Scheduler Thread - 3 - AuctionHouse/WARN]: slow task
+[12:43:10 INFO]: short form line
+"""
+
+
+def test_paper_format():
+    entries = [e for e in (parse_log_line(line, i) for i, line in enumerate(PAPER_SAMPLE.strip().splitlines(), 1)) if e]
+    assert len(entries) == 5
+    assert entries[0].level == "INFO"
+    assert entries[0].source == "ServerMain"
+    assert entries[1].level == "ERROR"
+    assert entries[2].level == "WARNING"
+    assert entries[3].source == "Craft Scheduler Thread - 3 - AuctionHouse"
+    assert entries[3].level == "WARNING"
+    assert entries[4].level == "INFO"
+    assert entries[4].source == "unknown"
+    assert entries[0].timestamp is not None
+    assert entries[0].timestamp.hour == 12 and entries[0].timestamp.minute == 43
+
+
 def test_report_version():
     from logpulse import __version__
     assert __version__ == "1.1.0"

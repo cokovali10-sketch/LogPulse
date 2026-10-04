@@ -42,6 +42,26 @@ WINDOWS_EVENT_PATTERN = re.compile(
     r'(?P<source>[^-]+)\s+-\s+(?P<message>.+)$'
 )
 
+# Paper / Purpur / Spigot console: [12:43:22] [Server thread/ERROR]: message
+PAPER_PATTERN = re.compile(
+    r"^\[(?P<timestamp>\d{2}:\d{2}:\d{2})\]\s+"
+    r"\[(?P<source>[^\]]*?)/(?P<level>DEBUG|INFO|WARNING|WARN|ERROR|ERR|CRITICAL|FATAL)\]:\s*"
+    r"(?P<message>.+)$"
+)
+
+# Paper short form: [12:43:22 INFO]: message
+PAPER_SHORT_PATTERN = re.compile(
+    r"^\[(?P<timestamp>\d{2}:\d{2}:\d{2})\s+"
+    r"(?P<level>DEBUG|INFO|WARNING|WARN|ERROR|ERR|CRITICAL|FATAL)\]:\s*"
+    r"(?P<message>.+)$"
+)
+
+LEVEL_ALIASES = {
+    "WARN": "WARNING",
+    "ERR": "ERROR",
+    "FATAL": "CRITICAL",
+}
+
 GENERIC_BRACKETED = re.compile(
     r'^(?:\[?(?P<timestamp>[^\]\s]+(?:\s+[^\]]+)?)\]?\s+)?'
     r'(?P<level>DEBUG|INFO|NOTICE|WARNING|WARN|ERROR|ERR|CRITICAL|FATAL|ALERT|EMERG)\s*'
@@ -74,6 +94,7 @@ def parse_timestamp(ts_str: str) -> Optional[datetime]:
         "%Y-%m-%d %H:%M:%S.%f",
         "%Y-%m-%d %H:%M:%S",
         "%b %d %H:%M:%S",
+        "%H:%M:%S",
     ]
     for fmt in formats:
         try:
@@ -98,6 +119,20 @@ def parse_log_line(raw: str, line_number: int) -> Optional[LogEntry]:
             line_number=line_number,
             raw=raw,
             extra={},
+        )
+
+    m = PAPER_PATTERN.match(raw)
+    if not m:
+        m = PAPER_SHORT_PATTERN.match(raw)
+    if m:
+        return LogEntry(
+            timestamp=parse_timestamp(m.group("timestamp")),
+            level=LEVEL_ALIASES.get(m.group("level"), m.group("level")),
+            source=m.groupdict().get("source") or "unknown",
+            message=m.group("message"),
+            line_number=line_number,
+            raw=raw,
+            extra={"format": "paper"},
         )
 
     m = SYSLOG_PATTERN.match(raw)
