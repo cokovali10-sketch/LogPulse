@@ -7,7 +7,6 @@ import os
 from datetime import datetime
 
 from .analyzer import LogAnalyzer
-from .filter import LogFilter
 
 
 def main():

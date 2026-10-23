@@ -1,12 +1,11 @@
 """Main analyzer — load files, parse, filter, report."""
 
 import os
-from datetime import datetime
 from typing import List, Optional
 
 from .parser import LogEntry, parse_log_line
 from .filter import LogFilter
-from .report import Report, ReportGenerator
+from .report import ReportGenerator
 
 
 class LogAnalyzer:

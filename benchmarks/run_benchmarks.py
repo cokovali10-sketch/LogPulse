@@ -14,7 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from logpulse.parser import parse_log_line
 from logpulse.analyzer import LogAnalyzer
-from logpulse.report import ReportGenerator
+# --- константы вынесены FORGE refactor ---
+CONST_60 = 60
+CONST_70 = 70
+CONST_1000 = 1000
+CONST_1024 = 1024
+
 
 LEVELS = ["DEBUG", "INFO", "INFO", "INFO", "WARNING", "WARNING", "ERROR", "CRITICAL"]
 SOURCES = ["server.app", "server.db", "server.api", "server.cache", "server.auth", "server.core"]
@@ -36,7 +41,7 @@ def generate_log_line(line_num: int) -> str:
     level = random.choice(LEVELS)
     source = random.choice(SOURCES)
     message = random.choice(MESSAGES)
-    ts = f"2024-01-15 {10 + (line_num // 3600) % 14:02d}:{(line_num // 60) % 60:02d}:{line_num % 60:02d}"
+    ts = f"2024-01-15 {10 + (line_num // 3600) % 14:02d}:{(line_num // CONST_60) % CONST_60:02d}:{line_num % CONST_60:02d}"
     return f"{ts} {level} {source} {message}"
 
 
@@ -61,7 +66,7 @@ def benchmark_parse_only(path: str, num_lines: int) -> dict:
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
 
-    return {"time_ms": elapsed * 1000, "entries": count, "peak_mb": peak / 1024 / 1024}
+    return {"time_ms": elapsed * CONST_1000, "entries": count, "peak_mb": peak / CONST_1024 / CONST_1024}
 
 
 def benchmark_full_pipeline(path: str, num_lines: int) -> dict:
@@ -78,9 +83,9 @@ def benchmark_full_pipeline(path: str, num_lines: int) -> dict:
     tracemalloc.stop()
 
     return {
-        "time_ms": elapsed * 1000,
+        "time_ms": elapsed * CONST_1000,
         "entries": len(analyzer.entries),
-        "peak_mb": peak / 1024 / 1024,
+        "peak_mb": peak / CONST_1024 / CONST_1024,
         "report_len": len(text),
     }
 
@@ -88,14 +93,14 @@ def benchmark_full_pipeline(path: str, num_lines: int) -> dict:
 def main():
     sizes = [
         ("100 lines", 100),
-        ("1K lines", 1_000),
+        ("1K lines", CONST_1000),
         ("10K lines", 10_000),
         ("100K lines", 100_000),
     ]
 
-    print("=" * 70)
+    print("=" * CONST_70)
     print("  LogPulse Benchmarks")
-    print("=" * 70)
+    print("=" * CONST_70)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         for label, num_lines in sizes:
@@ -106,7 +111,7 @@ def main():
             parse_result = benchmark_parse_only(path, num_lines)
             pipeline_result = benchmark_full_pipeline(path, num_lines)
 
-            print(f"\n  [{label}]  file size: {file_size / 1024:.1f} KB")
+            print(f"\n  [{label}]  file size: {file_size / CONST_1024:.1f} KB")
             print(f"    Parse only:    {parse_result['time_ms']:8.1f} ms  "
                   f"({parse_result['entries']} entries, "
                   f"peak {parse_result['peak_mb']:.1f} MB)")
@@ -114,7 +119,7 @@ def main():
                   f"(peak {pipeline_result['peak_mb']:.1f} MB, "
                   f"report {pipeline_result['report_len']:,} chars)")
 
-    print("\n" + "=" * 70)
+    print("\n" + "=" * CONST_70)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 """Build LogPulse EXE with PyInstaller."""
-import subprocess, sys, os, shutil
+import subprocess, sys, os
+# --- константы вынесены FORGE refactor ---
+CONST_1024 = 1024
+
 
 def build():
     print("Building LogPulse EXE...")
@@ -15,7 +18,7 @@ def build():
     subprocess.run(cmd, check=True)
     os.makedirs("dist", exist_ok=True)
     if os.path.exists("dist/logpulse.exe"):
-        size = os.path.getsize("dist/logpulse.exe") // (1024*1024)
+        size = os.path.getsize("dist/logpulse.exe") // (CONST_1024*CONST_1024)
         print(f"OK: dist/logpulse.exe ({size} MB)")
     else:
         print("FAILED")

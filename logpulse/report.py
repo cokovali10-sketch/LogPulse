@@ -12,6 +12,13 @@ from datetime import datetime
 from typing import Callable, Dict, List, Optional
 
 from .parser import LogEntry, parse_log_line
+# --- константы вынесены FORGE refactor ---
+CONST_20 = 20
+CONST_40 = 40
+CONST_50 = 50
+CONST_60 = 60
+CONST_200 = 200
+
 
 
 @dataclass
@@ -62,7 +69,7 @@ class ReportGenerator:
                 hourly[e.timestamp.hour] += 1
 
         msg_counts = Counter(e.message[:100] for e in self.entries)
-        top_messages = [{"message": m, "count": c} for m, c in msg_counts.most_common(20)]
+        top_messages = [{"message": m, "count": c} for m, c in msg_counts.most_common(CONST_20)]
 
         source_details: Dict[str, SourceStats] = {}
         for src in source_counts:
@@ -81,7 +88,7 @@ class ReportGenerator:
             if e.level in ("ERROR", "CRITICAL"):
                 errors_by_source[e.source].append({
                     "line": e.line_number,
-                    "message": e.message[:200],
+                    "message": e.message[:CONST_200],
                     "timestamp": str(e.timestamp) if e.timestamp else None,
                 })
 
@@ -105,9 +112,9 @@ class ReportGenerator:
     def to_text(self) -> str:
         r = self.generate()
         lines = [
-            "=" * 60,
+            "=" * CONST_60,
             "  LogPulse Report",
-            "=" * 60,
+            "=" * CONST_60,
             f"Generated:    {r.generated_at}",
             f"Total lines:  {r.total_lines}",
             f"Shown lines:  {r.filtered_lines}",
@@ -116,11 +123,11 @@ class ReportGenerator:
             "--- Level Distribution ---",
         ]
         for level, count in sorted(r.level_counts.items()):
-            bar = "#" * min(count, 50)
+            bar = "#" * min(count, CONST_50)
             lines.append(f"  {level:10s} {count:6d}  {bar}")
 
         lines.extend(["", "--- Source Distribution ---"])
-        for src, count in sorted(r.source_counts.items(), key=lambda x: -x[1])[:20]:
+        for src, count in sorted(r.source_counts.items(), key=lambda x: -x[1])[:CONST_20]:
             lines.append(f"  {src:30s} {count:6d}")
 
         if r.hourly_distribution:
@@ -128,7 +135,7 @@ class ReportGenerator:
             max_h = max(r.hourly_distribution.values()) or 1
             for hour in range(24):
                 cnt = r.hourly_distribution.get(hour, 0)
-                bar = "#" * int(cnt / max_h * 40) if cnt else ""
+                bar = "#" * int(cnt / max_h * CONST_40) if cnt else ""
                 lines.append(f"  {hour:02d}:00  {cnt:5d}  {bar}")
 
         if r.errors_by_source:
@@ -138,7 +145,7 @@ class ReportGenerator:
                 for err in errors[:5]:
                     lines.append(f"    L{err['line']}: {err['message'][:80]}")
 
-        lines.append("=" * 60)
+        lines.append("=" * CONST_60)
         return "\n".join(lines)
 
     def to_json(self, indent: int = 2) -> str:
@@ -154,7 +161,7 @@ class ReportGenerator:
                 str(e.timestamp) if e.timestamp else "",
                 e.level,
                 e.source,
-                e.message[:200],
+                e.message[:CONST_200],
             ])
         return buf.getvalue()
 
@@ -184,7 +191,7 @@ class ReportGenerator:
         html.append("</table>")
 
         html.append("<h2>Top Sources</h2><table><tr><th>Source</th><th>Count</th></tr>")
-        for src, cnt in sorted(r.source_counts.items(), key=lambda x: -x[1])[:20]:
+        for src, cnt in sorted(r.source_counts.items(), key=lambda x: -x[1])[:CONST_20]:
             html.append(f"<tr><td>{src}</td><td>{cnt}</td></tr>")
         html.append("</table>")
 
@@ -254,7 +261,7 @@ class LiveDashboard:
     RESET = "\033[0m"
     BOLD = "\033[1m"
 
-    def __init__(self, use_color: Optional[bool] = None, max_display: int = 50):
+    def __init__(self, use_color: Optional[bool] = None, max_display: int = CONST_50):
         if use_color is None:
             self._color = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
         else:
@@ -284,9 +291,9 @@ class LiveDashboard:
     def print_summary(self) -> None:
         """Print a summary of the monitoring session."""
         print()
-        print("=" * 60)
+        print("=" * CONST_60)
         print(f"  {self.BOLD}LogPulse Live Summary{self.RESET}")
-        print("=" * 60)
+        print("=" * CONST_60)
         print(f"  Total entries seen: {self._count}")
         print()
         if self._level_counts:
@@ -294,6 +301,6 @@ class LiveDashboard:
             for level in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
                 cnt = self._level_counts.get(level, 0)
                 if cnt:
-                    bar = "#" * min(cnt, 40)
+                    bar = "#" * min(cnt, CONST_40)
                     print(f"    {level:10s} {cnt:6d}  {bar}")
-        print("=" * 60)
+        print("=" * CONST_60)

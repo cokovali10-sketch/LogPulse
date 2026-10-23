@@ -9,10 +9,19 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from logpulse.parser import parse_log_line, LEVELS
+from logpulse.parser import parse_log_line
 from logpulse.filter import LogFilter
 from logpulse.analyzer import LogAnalyzer
-from logpulse.report import ReportGenerator, LiveDashboard, tail_log
+from logpulse.report import LiveDashboard, tail_log
+# --- константы вынесены FORGE refactor ---
+CONST_3 = 3
+CONST_4 = 4
+CONST_8 = 8
+CONST_9 = 9
+CONST_15 = 15
+CONST_200 = 200
+CONST_2024 = 2024
+
 
 
 SAMPLE_LOGS = """2024-01-15 10:30:01 INFO server.app Starting application
@@ -67,7 +76,7 @@ def test_parse_apache():
     entry = parse_log_line(APACHE_SAMPLE.strip().splitlines()[0], 1)
     assert entry is not None
     assert entry.level == "INFO"
-    assert entry.extra["status"] == 200
+    assert entry.extra["status"] == CONST_200
 
 
 def test_parse_json_line():
@@ -86,7 +95,7 @@ def test_filter_level():
     f = LogFilter().by_level(min_level="ERROR")
     result = f.apply(entries)
     assert all(e.level in ("ERROR", "CRITICAL") for e in result)
-    assert len(result) == 3
+    assert len(result) == CONST_3
 
 
 def test_filter_source():
@@ -114,8 +123,8 @@ def test_filter_keyword():
 def test_analyzer_load_string():
     analyzer = LogAnalyzer()
     count = analyzer.load_string(SAMPLE_LOGS)
-    assert count == 8
-    assert len(analyzer.entries) == 8
+    assert count == CONST_8
+    assert len(analyzer.entries) == CONST_8
 
 
 def test_report_text():
@@ -156,7 +165,7 @@ def test_full_pipeline():
     f = analyzer.filter().by_level(min_level="WARNING")
     filtered = analyzer.apply_filter(f)
     report = filtered.report()
-    assert report.generate().filtered_lines == 4
+    assert report.generate().filtered_lines == CONST_4
     text = report.to_text()
     assert "WARNING" in text
 
@@ -164,7 +173,7 @@ def test_full_pipeline():
 def test_parse_nginx():
     entry = parse_log_line(NGINX_SAMPLE.strip().splitlines()[0], 1)
     assert entry is not None
-    assert entry.extra["status"] == 200
+    assert entry.extra["status"] == CONST_200
     assert entry.extra["method"] == "GET"
     assert entry.extra["size"] == "1234"
 
@@ -214,8 +223,8 @@ def test_filter_time_range():
             entries.append(e)
     from datetime import datetime
     f = LogFilter().by_time_range(
-        start=datetime(2024, 1, 15, 10, 30, 0),
-        end=datetime(2024, 1, 15, 11, 0, 0),
+        start=datetime(CONST_2024, 1, CONST_15, 10, 30, 0),
+        end=datetime(CONST_2024, 1, CONST_15, 11, 0, 0),
     )
     result = f.apply(entries)
     assert len(result) == 6
@@ -249,8 +258,8 @@ def test_analyzer_multiple_loads():
 def test_level_num():
     entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[0], 1)
     assert entry.level_num == 1  # INFO
-    entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[3], 1)
-    assert entry.level_num == 3  # ERROR
+    entry = parse_log_line(SAMPLE_LOGS.strip().splitlines()[CONST_3], 1)
+    assert entry.level_num == CONST_3  # ERROR
 
 
 def test_live_dashboard_counts():
@@ -267,7 +276,7 @@ def test_live_dashboard_summary():
         entry = parse_log_line(line, i)
         if entry:
             dashboard.on_entry(entry)
-    assert dashboard._count == 8
+    assert dashboard._count == CONST_8
     assert dashboard._level_counts["ERROR"] == 2
     assert dashboard._level_counts["CRITICAL"] == 1
 
@@ -279,7 +288,7 @@ def test_tail_log_basic():
         path = f.name
     try:
         entries = list(tail_log(path, follow=False))
-        assert len(entries) == 8
+        assert len(entries) == CONST_8
         assert entries[0].level == "INFO"
     finally:
         os.unlink(path)
@@ -304,10 +313,10 @@ def test_tail_log_new_lines():
         t.start()
         for entry in tail_log(path, follow=True, poll_interval=0.1):
             collected.append(entry)
-            if len(collected) >= 9:
+            if len(collected) >= CONST_9:
                 break
-        t.join(timeout=3)
-        assert len(collected) >= 9
+        t.join(timeout=CONST_3)
+        assert len(collected) >= CONST_9
         assert collected[-1].source == "server.new"
     finally:
         os.unlink(path)
@@ -328,10 +337,10 @@ def test_paper_format():
     assert entries[0].source == "ServerMain"
     assert entries[1].level == "ERROR"
     assert entries[2].level == "WARNING"
-    assert entries[3].source == "Craft Scheduler Thread - 3 - AuctionHouse"
-    assert entries[3].level == "WARNING"
-    assert entries[4].level == "INFO"
-    assert entries[4].source == "unknown"
+    assert entries[CONST_3].source == "Craft Scheduler Thread - 3 - AuctionHouse"
+    assert entries[CONST_3].level == "WARNING"
+    assert entries[CONST_4].level == "INFO"
+    assert entries[CONST_4].source == "unknown"
     assert entries[0].timestamp is not None
     assert entries[0].timestamp.hour == 12 and entries[0].timestamp.minute == 43
 

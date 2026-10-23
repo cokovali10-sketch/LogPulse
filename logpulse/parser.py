@@ -4,6 +4,9 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+# --- константы вынесены FORGE refactor ---
+CONST_400 = 400
+
 
 LEVELS = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3, "CRITICAL": 4}
 
@@ -149,7 +152,7 @@ def parse_log_line(raw: str, line_number: int) -> Optional[LogEntry]:
 
     m = APACHE_PATTERN.match(raw)
     if m:
-        level = "ERROR" if int(m.group("status")) >= 400 else "INFO"
+        level = "ERROR" if int(m.group("status")) >= CONST_400 else "INFO"
         return LogEntry(
             timestamp=parse_timestamp(m.group("timestamp")),
             level=level,
@@ -170,7 +173,7 @@ def parse_log_line(raw: str, line_number: int) -> Optional[LogEntry]:
     m = NGINX_PATTERN.match(raw)
     if m:
         status = int(m.group("status"))
-        level = "ERROR" if status >= 500 else ("WARNING" if status >= 400 else "INFO")
+        level = "ERROR" if status >= 500 else ("WARNING" if status >= CONST_400 else "INFO")
         extra = {
             "method": m.group("method"),
             "path": m.group("path"),
