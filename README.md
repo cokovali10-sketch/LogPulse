@@ -1,3 +1,9 @@
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:38bdf8,100:a78bfa&height=160&section=header&text=LogPulse&fontSize=48&fontColor=ffffff&fontAlignY=38&animation=fadeIn" alt="header" />
+
+</div>
+
 # LogPulse
 
 Advanced log analyzer with multi-format parsing, filtering, real-time tail monitoring, and comprehensive reporting.
